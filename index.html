@@ -1,0 +1,1725 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>NAUTILUS-IDE — Submarine Python Control System</title>
+<link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Orbitron:wght@400;600;700;900&family=VT323&display=swap" rel="stylesheet">
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+:root {
+  --ng: #00ff88;
+  --nc: #00ffff;
+  --na: #ffaa00;
+  --nr: #ff2244;
+  --nb: #0088ff;
+  --np: #ff00cc;
+  --bg0: #010d10;
+  --bg1: #030f14;
+  --bg2: #051620;
+  --bg3: #07202e;
+  --bd0: #082030;
+  --bd1: #0a3545;
+  --mono: 'Share Tech Mono', monospace;
+  --hud: 'Orbitron', monospace;
+  --vt: 'VT323', monospace;
+}
+html, body { width: 100%; height: 100%; overflow: hidden; background: var(--bg0); }
+body { font-family: var(--mono); font-size: 13px; color: var(--nc); }
+
+/* ─── SCANLINE OVERLAY ─── */
+body::after {
+  content: '';
+  position: fixed;
+  inset: 0;
+  background: repeating-linear-gradient(0deg, transparent, transparent 3px, rgba(0,255,136,.008) 3px, rgba(0,255,136,.008) 4px);
+  pointer-events: none;
+  z-index: 9999;
+}
+
+/* ─── LAYOUT ─── */
+.ide {
+  display: grid;
+  grid-template-rows: 48px 1fr 32px;
+  grid-template-columns: 230px 1fr 270px;
+  height: 100vh;
+  width: 100%;
+}
+
+/* ─── TITLEBAR ─── */
+.titlebar {
+  grid-column: 1/-1;
+  background: var(--bg1);
+  border-bottom: 1px solid var(--nc);
+  box-shadow: 0 0 16px rgba(0,255,255,.15), inset 0 -1px 0 rgba(0,255,255,.3);
+  display: flex;
+  align-items: center;
+  padding: 0 16px;
+  gap: 18px;
+  position: relative;
+}
+.logo { display: flex; flex-direction: column; }
+.logo-name {
+  font-family: var(--hud);
+  font-size: 16px;
+  font-weight: 900;
+  letter-spacing: 4px;
+  color: var(--nc);
+  text-shadow: 0 0 12px var(--nc), 0 0 30px rgba(0,255,255,.3);
+}
+.logo-sub {
+  font-family: var(--hud);
+  font-size: 8px;
+  letter-spacing: 3px;
+  color: #005566;
+  margin-top: 1px;
+}
+.tb-actions { display: flex; gap: 6px; margin-left: 12px; }
+.tb-btn {
+  font-family: var(--hud);
+  font-size: 9px;
+  letter-spacing: 1.5px;
+  padding: 6px 14px;
+  background: var(--bg3);
+  border: 1px solid var(--bd1);
+  color: var(--nc);
+  cursor: pointer;
+  transition: all .18s;
+  text-transform: uppercase;
+  clip-path: polygon(6px 0%, 100% 0%, calc(100% - 6px) 100%, 0% 100%);
+}
+.tb-btn:hover { background: var(--bg2); border-color: var(--nc); box-shadow: 0 0 10px rgba(0,255,255,.3); color: #fff; }
+.tb-btn.run { border-color: #00aa55; color: var(--ng); }
+.tb-btn.run:hover { box-shadow: 0 0 12px rgba(0,255,136,.4); background: #001a0a; }
+.tb-btn.danger { border-color: #660022; color: var(--nr); }
+.tb-btn.danger:hover { box-shadow: 0 0 10px rgba(255,34,68,.35); background: #1a0008; }
+.tb-btn.amber { border-color: #664400; color: var(--na); }
+.tb-btn.amber:hover { box-shadow: 0 0 10px rgba(255,170,0,.35); background: #1a1000; }
+.tb-spacer { flex: 1; }
+.tb-gauges { display: flex; gap: 18px; align-items: center; }
+.gauge-item { font-family: var(--hud); font-size: 9px; letter-spacing: 1px; color: #005566; }
+.gauge-val { color: var(--ng); font-weight: 700; font-size: 11px; }
+.gauge-val.amber { color: var(--na); }
+.gauge-val.red { color: var(--nr); }
+.status-led {
+  width: 8px; height: 8px; border-radius: 50%;
+  background: var(--ng);
+  box-shadow: 0 0 6px var(--ng);
+  animation: ledpulse 2s infinite;
+  display: inline-block;
+  margin-right: 4px;
+}
+@keyframes ledpulse { 0%,100%{opacity:1} 50%{opacity:.4} }
+
+/* ─── LEFT PANEL ─── */
+.left-panel {
+  background: var(--bg1);
+  border-right: 1px solid var(--bd0);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+.panel-title {
+  font-family: var(--hud);
+  font-size: 8px;
+  letter-spacing: 2.5px;
+  color: #005566;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--bd0);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.panel-title .pt-accent { color: var(--nc); font-size: 9px; }
+.file-tree { flex: 0 0 auto; overflow-y: auto; padding: 4px 0; }
+.file-item {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 6px 12px;
+  cursor: pointer;
+  color: #006677;
+  font-size: 11px;
+  border-left: 2px solid transparent;
+  transition: all .14s;
+  user-select: none;
+}
+.file-item:hover { background: var(--bg2); color: var(--nc); border-left-color: #003344; }
+.file-item.active { background: #041820; color: var(--ng); border-left-color: var(--ng); box-shadow: inset 4px 0 12px rgba(0,255,136,.05); }
+.file-item.has-err { color: #774455; }
+.file-item.has-err.active { color: var(--ng); }
+.fi-icon { font-size: 10px; width: 12px; flex-shrink: 0; }
+.fi-name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.fi-mod { font-size: 8px; color: var(--na); }
+.fi-err { font-size: 8px; padding: 1px 4px; border-radius: 2px; background: #220008; color: var(--nr); border: 1px solid #440011; }
+.fi-ok { font-size: 8px; padding: 1px 4px; border-radius: 2px; background: #002210; color: var(--ng); border: 1px solid #004422; }
+.divider { height: 1px; background: var(--bd0); margin: 4px 0; }
+.imports-panel { flex: 0 0 auto; border-top: 1px solid var(--bd0); }
+.imports-list { padding: 4px 0; max-height: 160px; overflow-y: auto; }
+.imp-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 12px;
+  font-size: 11px;
+  color: #005566;
+  transition: background .1s;
+}
+.imp-row:hover { background: var(--bg2); }
+.imp-row.stdlib { color: #00aa55; }
+.imp-row.third { color: var(--na); }
+.imp-row.unknown { color: #888844; }
+.imp-row.err { color: var(--nr); }
+.imp-icon { font-size: 12px; width: 14px; text-align: center; }
+.imp-name { flex: 1; }
+.imp-line { font-size: 8px; opacity: .5; font-family: var(--hud); }
+.imp-badge { font-size: 8px; padding: 1px 4px; border-radius: 2px; }
+.badge-std { background: #001a0a; border: 1px solid #003322; color: #00aa55; }
+.badge-3p { background: #1a1000; border: 1px solid #332200; color: var(--na); }
+.badge-unk { background: #1a1a00; border: 1px solid #333300; color: #888844; }
+.badge-err { background: #220008; border: 1px solid #440011; color: var(--nr); }
+
+.snippets-panel { border-top: 1px solid var(--bd0); flex: 0 0 auto; }
+.snippet-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 4px; padding: 6px 8px; }
+.snip-btn {
+  font-family: var(--hud);
+  font-size: 8px;
+  letter-spacing: 1px;
+  padding: 5px 6px;
+  background: var(--bg2);
+  border: 1px solid var(--bd1);
+  color: #005566;
+  cursor: pointer;
+  text-align: center;
+  transition: all .15s;
+  text-transform: uppercase;
+}
+.snip-btn:hover { border-color: var(--nc); color: var(--nc); background: var(--bg3); }
+
+/* ─── EDITOR ─── */
+.editor-zone {
+  background: var(--bg0);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  border-right: 1px solid var(--bd0);
+}
+.tab-bar {
+  background: var(--bg1);
+  border-bottom: 1px solid var(--bd0);
+  display: flex;
+  gap: 1px;
+  padding: 0 8px;
+  overflow-x: auto;
+  flex-shrink: 0;
+  min-height: 32px;
+  align-items: flex-end;
+}
+.tab-bar::-webkit-scrollbar { height: 2px; }
+.tab {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 14px 5px;
+  font-size: 11px;
+  color: #005566;
+  cursor: pointer;
+  border: 1px solid transparent;
+  border-bottom: none;
+  margin-bottom: -1px;
+  white-space: nowrap;
+  transition: all .12s;
+  user-select: none;
+  position: relative;
+}
+.tab:hover { color: var(--nc); background: var(--bg2); }
+.tab.active {
+  background: var(--bg0);
+  color: var(--nc);
+  border-color: var(--bd0);
+  border-bottom-color: var(--bg0);
+}
+.tab-dot { width: 5px; height: 5px; border-radius: 50%; background: #005566; flex-shrink: 0; }
+.tab.active .tab-dot { background: var(--ng); box-shadow: 0 0 4px var(--ng); }
+.tab.tab-dirty .tab-dot { background: var(--na); }
+.tab.tab-err .tab-dot { background: var(--nr); box-shadow: 0 0 4px var(--nr); }
+.tab-close { font-size: 10px; color: #003344; padding: 0 2px; }
+.tab-close:hover { color: var(--nr); }
+
+.editor-body { flex: 1; display: flex; overflow: hidden; position: relative; }
+.line-gutter {
+  background: var(--bg1);
+  border-right: 1px solid var(--bd0);
+  min-width: 50px;
+  padding: 14px 0;
+  font-size: 12px;
+  line-height: 1.72;
+  color: #003344;
+  user-select: none;
+  overflow: hidden;
+  flex-shrink: 0;
+  text-align: right;
+}
+.ln { padding: 0 8px; display: block; font-family: var(--hud); font-size: 10px; }
+.ln.ln-err { color: var(--nr); font-weight: 700; text-shadow: 0 0 6px rgba(255,34,68,.5); }
+.ln.ln-warn { color: var(--na); }
+#editor {
+  flex: 1;
+  background: transparent;
+  border: none;
+  outline: none;
+  color: #99ccdd;
+  font-family: var(--mono);
+  font-size: 13px;
+  line-height: 1.72;
+  padding: 14px 16px;
+  resize: none;
+  caret-color: var(--ng);
+  overflow-y: auto;
+  tab-size: 4;
+  white-space: pre;
+  overflow-wrap: normal;
+  overflow-x: auto;
+}
+#editor::selection { background: rgba(0,255,136,.18); }
+#editor::-webkit-scrollbar { width: 4px; height: 4px; }
+#editor::-webkit-scrollbar-track { background: var(--bg1); }
+#editor::-webkit-scrollbar-thumb { background: var(--bd1); border-radius: 2px; }
+
+.output-zone {
+  flex: 0 0 140px;
+  background: var(--bg1);
+  border-top: 1px solid var(--bd0);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+.out-header {
+  font-family: var(--hud);
+  font-size: 8px;
+  letter-spacing: 2.5px;
+  color: #005566;
+  padding: 5px 12px;
+  border-bottom: 1px solid var(--bd0);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+.out-header .oh-accent { color: var(--nc); }
+.out-body {
+  flex: 1;
+  overflow-y: auto;
+  padding: 6px 14px 8px;
+  font-size: 12px;
+  line-height: 1.65;
+}
+.out-body::-webkit-scrollbar { width: 3px; }
+.out-body::-webkit-scrollbar-thumb { background: var(--bd0); }
+.out-line { display: block; font-family: var(--mono); }
+.o-ok { color: var(--ng); }
+.o-err { color: var(--nr); }
+.o-warn { color: var(--na); }
+.o-info { color: var(--nc); }
+.o-sys { color: #005566; }
+.o-dim { color: #003344; }
+
+/* ─── RIGHT PANEL ─── */
+.right-panel {
+  background: var(--bg1);
+  display: flex;
+  flex-direction: column;
+  overflow-y: auto;
+  overflow-x: hidden;
+}
+.right-panel::-webkit-scrollbar { width: 3px; }
+.right-panel::-webkit-scrollbar-thumb { background: var(--bd0); }
+
+/* RADAR */
+.radar-wrap {
+  padding: 14px 12px 10px;
+  border-bottom: 1px solid var(--bd0);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+}
+.sec-title {
+  font-family: var(--hud);
+  font-size: 8px;
+  letter-spacing: 2.5px;
+  color: #005566;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  width: 100%;
+}
+.sec-title .sta { color: var(--nc); font-size: 9px; }
+.radar-frame {
+  position: relative;
+  width: 230px;
+  height: 230px;
+}
+#radar {
+  border-radius: 50%;
+  border: 1.5px solid #005566;
+  box-shadow:
+    0 0 0 1px #002233,
+    0 0 24px rgba(0,80,60,.5),
+    0 0 50px rgba(0,30,20,.7),
+    inset 0 0 40px rgba(0,0,0,.8);
+  display: block;
+}
+.radar-corner {
+  position: absolute;
+  font-family: var(--hud);
+  font-size: 8px;
+  color: #003344;
+  letter-spacing: 1px;
+}
+.rc-tl { top: 6px; left: 10px; }
+.rc-tr { top: 6px; right: 10px; }
+.rc-bl { bottom: 6px; left: 10px; }
+.rc-br { bottom: 6px; right: 10px; }
+.radar-legend {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  justify-content: center;
+}
+.rl { display: flex; align-items: center; gap: 4px; font-size: 9px; color: #005566; font-family: var(--hud); letter-spacing: 1px; }
+.rl-dot { width: 7px; height: 7px; border-radius: 50%; }
+
+/* INSTRUMENTS */
+.instruments {
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--bd0);
+}
+.inst-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 5px;
+  margin-top: 6px;
+}
+.inst {
+  background: var(--bg2);
+  border: 1px solid var(--bd0);
+  padding: 6px 8px;
+  position: relative;
+  overflow: hidden;
+}
+.inst::before {
+  content: '';
+  position: absolute;
+  top: 0; left: 0; right: 0;
+  height: 1px;
+}
+.inst.inst-red::before { background: var(--nr); box-shadow: 0 0 6px var(--nr); }
+.inst.inst-amber::before { background: var(--na); box-shadow: 0 0 6px var(--na); }
+.inst.inst-cyan::before { background: var(--nc); box-shadow: 0 0 6px var(--nc); }
+.inst.inst-green::before { background: var(--ng); box-shadow: 0 0 6px var(--ng); }
+.inst-label { font-family: var(--hud); font-size: 7px; letter-spacing: 2px; color: #005566; margin-bottom: 3px; }
+.inst-val { font-family: var(--hud); font-size: 20px; font-weight: 700; line-height: 1; }
+.iv-r { color: var(--nr); text-shadow: 0 0 8px rgba(255,34,68,.5); }
+.iv-a { color: var(--na); text-shadow: 0 0 8px rgba(255,170,0,.5); }
+.iv-c { color: var(--nc); text-shadow: 0 0 8px rgba(0,255,255,.4); }
+.iv-g { color: var(--ng); text-shadow: 0 0 8px rgba(0,255,136,.4); }
+
+/* THREAT CONTACTS */
+.threats { padding: 10px 12px; border-bottom: 1px solid var(--bd0); }
+.threat-list { margin-top: 6px; display: flex; flex-direction: column; gap: 4px; max-height: 200px; overflow-y: auto; }
+.threat-list::-webkit-scrollbar { width: 2px; }
+.threat-list::-webkit-scrollbar-thumb { background: var(--bd0); }
+.threat-entry {
+  background: #120004;
+  border: 1px solid #2a0010;
+  border-left: 3px solid var(--nr);
+  padding: 5px 8px;
+  font-size: 10px;
+  color: #ff5577;
+  border-radius: 0 2px 2px 0;
+}
+.threat-entry.warn {
+  background: #120a00;
+  border-color: #2a1800;
+  border-left-color: var(--na);
+  color: #ffcc44;
+}
+.threat-hdr { font-family: var(--hud); font-size: 8px; margin-bottom: 2px; letter-spacing: 1px; }
+.threat-hdr.err-hdr { color: var(--nr); }
+.threat-hdr.warn-hdr { color: var(--na); }
+.threat-msg { font-family: var(--mono); line-height: 1.4; }
+.no-threats { text-align: center; padding: 14px; color: #005566; font-family: var(--hud); font-size: 9px; letter-spacing: 2px; }
+.nt-green { color: var(--ng); font-size: 11px; display: block; margin-bottom: 4px; }
+
+/* CONTROL PALLET */
+.controls { padding: 10px 12px; }
+.ctrl-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 5px; margin-top: 6px; }
+.ctrl {
+  font-family: var(--hud);
+  font-size: 8px;
+  letter-spacing: 1px;
+  padding: 9px 6px;
+  background: var(--bg2);
+  border: 1px solid var(--bd1);
+  color: var(--nc);
+  cursor: pointer;
+  text-align: center;
+  text-transform: uppercase;
+  transition: all .16s;
+  position: relative;
+  overflow: hidden;
+}
+.ctrl::after { content: ''; position: absolute; inset: 0; background: transparent; transition: background .16s; }
+.ctrl:hover { border-color: var(--nc); box-shadow: 0 0 10px rgba(0,255,255,.2); color: #fff; }
+.ctrl:hover::after { background: rgba(0,255,255,.03); }
+.ctrl:active { transform: scale(.98); }
+.ctrl.cg { border-color: #003322; color: var(--ng); }
+.ctrl.cg:hover { box-shadow: 0 0 10px rgba(0,255,136,.3); border-color: var(--ng); }
+.ctrl.cr { border-color: #330011; color: var(--nr); }
+.ctrl.cr:hover { box-shadow: 0 0 10px rgba(255,34,68,.3); border-color: var(--nr); }
+.ctrl.ca { border-color: #332200; color: var(--na); }
+.ctrl.ca:hover { box-shadow: 0 0 10px rgba(255,170,0,.3); border-color: var(--na); }
+
+/* ─── STATUS BAR ─── */
+.statusbar {
+  grid-column: 1/-1;
+  background: var(--bg1);
+  border-top: 1px solid var(--nc);
+  box-shadow: 0 0 10px rgba(0,255,255,.1), inset 0 1px 0 rgba(0,255,255,.2);
+  display: flex;
+  align-items: center;
+  padding: 0 14px;
+  gap: 0;
+  font-family: var(--hud);
+  font-size: 8px;
+  letter-spacing: 1.5px;
+  position: relative;
+  z-index: 10;
+  overflow: hidden;
+}
+.sb { color: #005566; display: flex; align-items: center; gap: 5px; padding: 0 12px; border-right: 1px solid var(--bd0); white-space: nowrap; }
+.sb:first-child { padding-left: 0; }
+.sbv { color: var(--nc); }
+.sbv.g { color: var(--ng); }
+.sbv.a { color: var(--na); }
+.sbv.r { color: var(--nr); }
+.sb-spacer { flex: 1; }
+.marquee-wrap { overflow: hidden; width: 200px; }
+.marquee-txt { font-family: var(--vt); font-size: 14px; color: #004455; white-space: nowrap; animation: marquee 18s linear infinite; }
+@keyframes marquee { 0%{transform:translateX(200px)} 100%{transform:translateX(-600px)} }
+
+/* SCROLLBARS */
+::-webkit-scrollbar { width: 4px; height: 4px; }
+::-webkit-scrollbar-track { background: var(--bg1); }
+::-webkit-scrollbar-thumb { background: var(--bd1); border-radius: 2px; }
+</style>
+</head>
+<body>
+<div class="ide" id="ideRoot">
+
+<!-- ══════════════ TITLEBAR ══════════════ -->
+<div class="titlebar">
+  <div class="logo">
+    <div class="logo-name">⊙ NAUTILUS-IDE</div>
+    <div class="logo-sub">SUBMARINE PYTHON CONTROL SYSTEM — DEEP WATER EDITION v3.1</div>
+  </div>
+  <div class="tb-actions">
+    <button class="tb-btn run" onclick="runCode()" title="Ctrl+Enter">▶ LAUNCH</button>
+    <button class="tb-btn" onclick="analyzeCode()">⟳ SCAN</button>
+    <button class="tb-btn amber" onclick="formatCode()">⟲ FORMAT</button>
+    <button class="tb-btn" onclick="saveFile()" title="Ctrl+S">↓ SAVE</button>
+    <button class="tb-btn" onclick="newFile()">+ NEW</button>
+    <button class="tb-btn danger" onclick="emergencySurface()">⚡ EMERGENCY</button>
+  </div>
+  <div class="tb-spacer"></div>
+  <div class="tb-gauges">
+    <div class="gauge-item">DEPTH: <span class="gauge-val" id="gDepth">247m</span></div>
+    <div class="gauge-item">PRESSURE: <span class="gauge-val amber" id="gPres">24.7ATM</span></div>
+    <div class="gauge-item">HULL: <span class="gauge-val" id="gHull">98%</span></div>
+    <div class="gauge-item"><span class="status-led"></span><span class="gauge-val g" id="gStatus">ONLINE</span></div>
+  </div>
+</div>
+
+<!-- ══════════════ LEFT PANEL ══════════════ -->
+<div class="left-panel">
+  <div class="panel-title"><span class="pt-accent">◈</span> MISSION FILE SYSTEM</div>
+  <div class="file-tree" id="fileTree"></div>
+  <div class="divider"></div>
+  <div class="imports-panel">
+    <div class="panel-title"><span class="pt-accent">⬡</span> IMPORT MANIFEST</div>
+    <div class="imports-list" id="importsList">
+      <div class="imp-row" style="color:#003344;font-size:10px;padding:8px 12px">Scan code to detect imports</div>
+    </div>
+  </div>
+  <div class="divider"></div>
+  <div class="snippets-panel">
+    <div class="panel-title"><span class="pt-accent">≡</span> MISSION MODULES</div>
+    <div class="snippet-grid">
+      <button class="snip-btn" onclick="loadSnippet('nav')">Navigation</button>
+      <button class="snip-btn" onclick="loadSnippet('sonar')">Sonar Sys</button>
+      <button class="snip-btn" onclick="loadSnippet('torpedo')">Torpedo</button>
+      <button class="snip-btn" onclick="loadSnippet('comms')">Comms</button>
+      <button class="snip-btn" onclick="loadSnippet('reactor')">Reactor</button>
+      <button class="snip-btn" onclick="loadSnippet('periscope')">Periscope</button>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════ EDITOR ══════════════ -->
+<div class="editor-zone">
+  <div class="tab-bar" id="tabBar"></div>
+  <div class="editor-body">
+    <div class="line-gutter" id="gutter"></div>
+    <textarea id="editor" spellcheck="false" autocomplete="off" autocorrect="off" autocapitalize="off"></textarea>
+  </div>
+  <div class="output-zone">
+    <div class="out-header">
+      <span class="oh-accent">▸</span>
+      SONAR OUTPUT CHANNEL
+      <span style="margin-left:auto;font-size:8px;cursor:pointer;color:#005566" onclick="clearOutput()" title="Clear">⊗ PURGE</span>
+    </div>
+    <div class="out-body" id="outputBody"></div>
+  </div>
+</div>
+
+<!-- ══════════════ RIGHT PANEL ══════════════ -->
+<div class="right-panel">
+
+  <!-- RADAR -->
+  <div class="radar-wrap">
+    <div class="sec-title"><span class="sta">⊙</span> MARINE RADAR — ERROR DETECTION ARRAY</div>
+    <div class="radar-frame">
+      <canvas id="radar" width="230" height="230"></canvas>
+      <span class="radar-corner rc-tl">N</span>
+      <span class="radar-corner rc-tr">NE</span>
+      <span class="radar-corner rc-bl">SW</span>
+      <span class="radar-corner rc-br">S</span>
+    </div>
+    <div class="radar-legend">
+      <div class="rl"><div class="rl-dot" style="background:#ff2244"></div>SYNTAX ERR</div>
+      <div class="rl"><div class="rl-dot" style="background:#ffaa00"></div>WARNING</div>
+      <div class="rl"><div class="rl-dot" style="background:#00ff88"></div>STDLIB</div>
+      <div class="rl"><div class="rl-dot" style="background:#00ffff"></div>3RD PARTY</div>
+    </div>
+  </div>
+
+  <!-- INSTRUMENTS -->
+  <div class="instruments">
+    <div class="sec-title"><span class="sta">◈</span> HULL INSTRUMENTS</div>
+    <div class="inst-grid">
+      <div class="inst inst-red">
+        <div class="inst-label">ERRORS</div>
+        <div class="inst-val iv-r" id="iErr">0</div>
+      </div>
+      <div class="inst inst-amber">
+        <div class="inst-label">WARNINGS</div>
+        <div class="inst-val iv-a" id="iWarn">0</div>
+      </div>
+      <div class="inst inst-cyan">
+        <div class="inst-label">LINES</div>
+        <div class="inst-val iv-c" id="iLines">0</div>
+      </div>
+      <div class="inst inst-green">
+        <div class="inst-label">IMPORTS</div>
+        <div class="inst-val iv-g" id="iImports">0</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- THREAT CONTACTS -->
+  <div class="threats">
+    <div class="sec-title"><span class="sta">◈</span> THREAT CONTACTS</div>
+    <div class="threat-list" id="threatList">
+      <div class="no-threats"><span class="nt-green">◉ ALL CLEAR</span>CLEAR WATERS</div>
+    </div>
+  </div>
+
+  <!-- CONTROL PALLET -->
+  <div class="controls">
+    <div class="sec-title"><span class="sta">◈</span> CONTROL PALLET</div>
+    <div class="ctrl-grid">
+      <button class="ctrl cg" onclick="runCode()">▶ Execute</button>
+      <button class="ctrl" onclick="analyzeCode()">⟳ Analyze</button>
+      <button class="ctrl ca" onclick="formatCode()">⟲ Format</button>
+      <button class="ctrl" onclick="saveFile()">↓ Save</button>
+      <button class="ctrl" onclick="newFile()">+ New File</button>
+      <button class="ctrl" onclick="closeFile()">✕ Close</button>
+      <button class="ctrl cr" onclick="clearOutput()">⊗ Purge Log</button>
+      <button class="ctrl cr" onclick="emergencySurface()">⚡ Emergency</button>
+    </div>
+  </div>
+
+</div>
+
+<!-- ══════════════ STATUSBAR ══════════════ -->
+<div class="statusbar">
+  <div class="sb">MODE: <span class="sbv g" id="sbMode">READY</span></div>
+  <div class="sb">FILE: <span class="sbv" id="sbFile">—</span></div>
+  <div class="sb">CURSOR: <span class="sbv" id="sbCursor">1:1</span></div>
+  <div class="sb">CHARS: <span class="sbv" id="sbChars">0</span></div>
+  <div class="sb">STATUS: <span class="sbv a" id="sbStat">STANDBY</span></div>
+  <div class="sb-spacer"></div>
+  <div class="marquee-wrap">
+    <div class="marquee-txt">NAUTILUS CONTROL SYSTEM — RUNNING SILENT — RUNNING DEEP — ALL SYSTEMS NOMINAL — TORPEDO DOORS SEALED — SONAR ACTIVE —</div>
+  </div>
+</div>
+
+</div><!-- #ideRoot -->
+
+<script>
+// ══════════════════════════════════════════
+//  DATABASE (JSON localStorage)
+// ══════════════════════════════════════════
+const DB = 'nautilus_v3';
+function dbLoad() {
+  try { return JSON.parse(localStorage.getItem(DB)) || mkDB(); } catch { return mkDB(); }
+}
+function dbSave(d) { try { localStorage.setItem(DB, JSON.stringify(d)); } catch {} }
+function mkDB() {
+  return {
+    files: [
+      { id:1, name:'mission_alpha.py', code:CODE.alpha, errors:0, modified:false, active:true },
+      { id:2, name:'nav_system.py',    code:CODE.nav,   errors:1, modified:false, active:false },
+      { id:3, name:'sonar_array.py',   code:CODE.sonar, errors:0, modified:true,  active:false },
+      { id:4, name:'torpedo_ctrl.py',  code:CODE.torp,  errors:2, modified:false, active:false },
+    ],
+    activeId: 1,
+    history: [],
+    settings: { theme:'submarine', fontSize:13 }
+  };
+}
+
+const CODE = {
+alpha:`# ╔══════════════════════════════════════╗
+# ║   NAUTILUS MISSION ALPHA             ║
+# ║   Submarine Control System v3.1      ║
+# ╚══════════════════════════════════════╝
+import os
+import sys
+import json
+import time
+import math
+from datetime import datetime
+from dataclasses import dataclass, field
+from typing import List, Optional
+
+@dataclass
+class Torpedo:
+    tube_id: int
+    type: str = "MK48"
+    armed: bool = False
+
+@dataclass
+class SubmarineController:
+    name: str = "NAUTILUS"
+    depth: float = 0.0
+    speed: float = 0.0
+    heading: float = 0.0
+    status: str = "SURFACE"
+    max_depth: float = 500.0
+    torpedoes: List[Torpedo] = field(default_factory=list)
+
+    def __post_init__(self):
+        self.torpedoes = [Torpedo(i) for i in range(4)]
+        self.boot_time = datetime.now()
+
+    def dive(self, target: float) -> str:
+        if target < 0:
+            raise ValueError("Depth cannot be negative")
+        if target > self.max_depth:
+            print(f"WARNING: Exceeds rated depth {self.max_depth}m")
+        self.depth = target
+        self.status = "SUBMERGED" if target > 0 else "SURFACE"
+        pressure = self.depth * 0.1
+        return f"[{datetime.now():%H:%M:%S}] Diving to {target}m | Pressure: {pressure:.1f} ATM"
+
+    def surface(self):
+        print("⚡ EMERGENCY SURFACE PROTOCOL ENGAGED")
+        self.depth = 0.0
+        self.status = "SURFACE"
+        self.speed = max(0, self.speed * 0.3)
+
+    def set_course(self, heading: float, speed: float):
+        self.heading = heading % 360
+        self.speed = min(speed, 35)
+        return f"Course: {self.heading:06.2f}° | Speed: {self.speed:.1f}kts"
+
+    def get_telemetry(self) -> dict:
+        return {
+            "vessel": self.name,
+            "depth_m": self.depth,
+            "pressure_atm": round(self.depth * 0.1, 2),
+            "speed_kts": self.speed,
+            "heading_deg": self.heading,
+            "status": self.status,
+            "uptime_s": (datetime.now() - self.boot_time).seconds,
+            "timestamp": datetime.now().isoformat()
+        }
+
+# ── Initialize ──
+sub = SubmarineController()
+print(sub.dive(247))
+print(sub.set_course(045, 12))
+print(json.dumps(sub.get_telemetry(), indent=2))
+`,
+
+nav:`# Navigation & Waypoint System
+import math
+from dataclasses import dataclass
+from typing import Tuple
+
+SOUND_SPEED = 1531  # m/s in seawater
+
+@dataclass
+class Position:
+    lat: float
+    lon: float
+    depth: float = 0.0
+    name: str = ""
+
+def haversine(p1: Position, p2: Position) -> float:
+    """Great-circle distance in meters"""
+    R = 6_371_000
+    phi1, phi2 = math.radians(p1.lat), math.radians(p2.lat)
+    dphi    = math.radians(p2.lat - p1.lat)
+    dlambda = math.radians(p2.lon - p1.lon)
+    a = (math.sin(dphi / 2) ** 2 +
+         math.cos(phi1) * math.cos(phi2) * math.sin(dlambda / 2) ** 2)
+    return R * 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a))
+
+def bearing(p1: Position, p2: Position) -> float:
+    """Initial compass bearing from p1 to p2 (degrees)"""
+    lat1, lat2 = math.radians(p1.lat), math.radians(p2.lat)
+    dlon = math.radians(p2.lon - p1.lon)
+    x = math.sin(dlon) * math.cos(lat2)
+    y = math.cos(lat1)*math.sin(lat2) - math.sin(lat1)*math.cos(lat2)*math.cos(dlon)
+    return (math.degrees(math.atan2(x, y)) + 360) % 360
+
+waypoints = [
+    Position(40.7128, -74.0060, 100, "HOME_PORT"),
+    Position(40.7580, -73.9855, 150, "WAYPOINT_ALPHA"),
+    Position(41.0534, -73.5387, 200, "OBJECTIVE"),
+]
+
+for i in range(len(waypoints) - 1):
+    a, b = waypoints[i], waypoints[i+1]
+    d = haversine(a, b)
+    hdg = bearing(a, b)
+    print(f"{a.name} → {b.name}: {d/1000:.2f}km, bearing {hdg:.1f}°")
+`,
+
+sonar:`# Sonar Array Processing System
+import struct
+import math
+import time
+from dataclasses import dataclass
+from typing import List, Optional
+
+SOUND_SPEED_SW = 1531  # m/s seawater at 15°C, 35ppt
+
+@dataclass
+class SonarContact:
+    bearing: float
+    range_m: float
+    depth: float
+    confidence: float
+    contact_type: str = "UNKNOWN"
+    track_id: Optional[int] = None
+
+    @property
+    def threat_level(self) -> str:
+        if self.range_m < 1000:  return "CLOSE"
+        if self.range_m < 5000:  return "MEDIUM"
+        return "DISTANT"
+
+def freq_to_wavelength(freq_hz: float, medium: str = 'seawater') -> float:
+    speeds = {'seawater': 1531, 'freshwater': 1480, 'air': 343}
+    return speeds.get(medium, 1531) / freq_hz
+
+def doppler_shift(f0: float, v_rel: float, c: float = 1531) -> float:
+    """Doppler-shifted frequency (positive v_rel = approaching)"""
+    return f0 * (c / (c - v_rel))
+
+def ping(frequency_hz: float = 5000, power_kw: float = 10.0) -> dict:
+    wl = freq_to_wavelength(frequency_hz)
+    max_range = math.sqrt(power_kw * 1000) * 500
+    return {
+        'freq_hz': frequency_hz,
+        'wavelength_m': round(wl, 4),
+        'estimated_range_m': round(max_range),
+        'propagation_delay_ms': round((max_range / SOUND_SPEED_SW) * 1000, 1)
+    }
+
+# Run sonar sweep
+for freq in [1_000, 5_000, 20_000, 100_000]:
+    result = ping(freq)
+    print(f"{freq:>7}Hz | λ={result['wavelength_m']*100:.2f}cm | range≈{result['estimated_range_m']}m")
+`,
+
+torp:`# Torpedo Fire Control System
+import random
+import math
+import time
+
+class TorpedoSystem:
+    TUBE_COUNT = 4
+    MAX_SPEED_KTS = 55
+    MAX_RANGE_KM = 50
+
+    def __init__(self):
+        self.tubes = [None] * self.TUBE_COUNT
+        self.safety = True
+        self.armed = False
+        self.fired_count = 0
+
+    def load_tube(self, tube_id: int, variant: str = "MK48-ADCAP"):
+        if tube_id not in range(self.TUBE_COUNT):
+            raise IndexError(f"Invalid tube ID: {tube_id}")  # note missing colon above
+        self.tubes[tube_id] = {
+            'variant': variant,
+            'loaded_at': time.time(),
+            'status': 'READY'
+        }
+        print(f"Tube {tube_id}: {variant} loaded — READY")
+
+    def fire_solution(self, target_speed, target_bearing_deg, torp_speed=40):
+        """Compute lead angle for intercept"""
+        tb = math.radians(target_bearing_deg)
+        sin_lead = (target_speed / torp_speed) * math.sin(tb)
+        if abs(sin_lead) > 1:
+            return None
+        return math.degrees(math.asin(sin_lead))
+
+    def fire(self, tube_id: int) -> bool:
+        if self.safety:
+            print("⚠  SAFETY ENGAGED — deactivate before firing")
+            return False
+        if self.tubes[tube_id] is None
+            raise RuntimeError(f"Tube {tube_id} is empty")
+        print(f"🚀 TORPEDO AWAY — Tube {tube_id} | {self.tubes[tube_id]['variant']}")
+        self.tubes[tube_id] = None
+        self.fired_count += 1
+        return True
+
+ts = TorpedoSystem()
+ts.load_tube(0)
+ts.load_tube(1, "MK48-ADCAP")
+angle = ts.fire_solution(15, 45, 40)
+print(f"Fire solution: lead angle = {angle:.1f}°" if angle else "No solution")
+`
+};
+
+// ══════════════════════════════════════════
+//  RADAR ENGINE
+// ══════════════════════════════════════════
+const canvas = document.getElementById('radar');
+const ctx = canvas.getContext('2d');
+const W = canvas.width, H = canvas.height;
+const CX = W / 2, CY = H / 2, R = CX - 6;
+let sweep = 0;
+let blips = [];
+
+function drawRadar() {
+  ctx.clearRect(0, 0, W, H);
+
+  // Background
+  const bg = ctx.createRadialGradient(CX, CY, 0, CX, CY, R);
+  bg.addColorStop(0, '#010f0a');
+  bg.addColorStop(0.7, '#010c08');
+  bg.addColorStop(1, '#000806');
+  ctx.save();
+  ctx.beginPath();
+  ctx.arc(CX, CY, R, 0, Math.PI * 2);
+  ctx.fillStyle = bg;
+  ctx.fill();
+  ctx.restore();
+
+  // Grid rings
+  for (let i = 1; i <= 4; i++) {
+    ctx.beginPath();
+    ctx.arc(CX, CY, R * i / 4, 0, Math.PI * 2);
+    ctx.strokeStyle = i === 4 ? 'rgba(0,100,80,.6)' : 'rgba(0,70,50,.35)';
+    ctx.lineWidth = i === 4 ? 1 : 0.5;
+    ctx.stroke();
+  }
+
+  // Spokes
+  for (let a = 0; a < 8; a++) {
+    const ang = (a / 8) * Math.PI * 2;
+    ctx.beginPath();
+    ctx.moveTo(CX, CY);
+    ctx.lineTo(CX + Math.cos(ang) * R, CY + Math.sin(ang) * R);
+    ctx.strokeStyle = 'rgba(0,60,45,.3)';
+    ctx.lineWidth = 0.5;
+    ctx.stroke();
+  }
+
+  // Sweep trail
+  const trailLen = Math.PI * 0.5;
+  for (let i = 0; i < 40; i++) {
+    const a = sweep - (i / 40) * trailLen;
+    const alpha = (1 - i / 40) * 0.22;
+    ctx.beginPath();
+    ctx.moveTo(CX, CY);
+    ctx.arc(CX, CY, R, a, a + 0.05);
+    ctx.closePath();
+    ctx.fillStyle = `rgba(0,255,100,${alpha})`;
+    ctx.fill();
+  }
+
+  // Sweep line
+  ctx.beginPath();
+  ctx.moveTo(CX, CY);
+  ctx.lineTo(CX + Math.cos(sweep) * R, CY + Math.sin(sweep) * R);
+  ctx.strokeStyle = 'rgba(0,255,120,.85)';
+  ctx.lineWidth = 1.5;
+  ctx.shadowColor = 'rgba(0,255,100,.5)';
+  ctx.shadowBlur = 4;
+  ctx.stroke();
+  ctx.shadowBlur = 0;
+
+  // Blips
+  blips.forEach(b => {
+    let diff = ((sweep - b.angle) % (Math.PI * 2) + Math.PI * 2) % (Math.PI * 2);
+    const fade = Math.max(0, 1 - diff / (Math.PI * 1.5));
+    if (fade < 0.04) return;
+    const bx = CX + Math.cos(b.angle) * b.r;
+    const by = CY + Math.sin(b.angle) * b.r;
+    const [r, g, bl] = b.rgb;
+    ctx.beginPath();
+    ctx.arc(bx, by, (b.size || 4) * 0.7, 0, Math.PI * 2);
+    ctx.fillStyle = `rgba(${r},${g},${bl},${fade * 0.3})`;
+    ctx.fill();
+    ctx.beginPath();
+    ctx.arc(bx, by, (b.size || 4) * 0.35, 0, Math.PI * 2);
+    ctx.fillStyle = `rgba(${r},${g},${bl},${fade})`;
+    ctx.fill();
+  });
+
+  // Center
+  ctx.beginPath();
+  ctx.arc(CX, CY, 3.5, 0, Math.PI * 2);
+  ctx.fillStyle = '#00ff88';
+  ctx.shadowColor = '#00ff88';
+  ctx.shadowBlur = 8;
+  ctx.fill();
+  ctx.shadowBlur = 0;
+}
+
+function animRadar() {
+  sweep += 0.022;
+  if (sweep > Math.PI * 2) sweep -= Math.PI * 2;
+  drawRadar();
+  requestAnimationFrame(animRadar);
+}
+animRadar();
+
+function setBlips(errors, warnings, imports) {
+  blips = [];
+  const rr = R - 12;
+  errors.forEach((e, i) => {
+    const angle = (i / Math.max(errors.length, 1)) * Math.PI * 2 * 0.8 + Math.random() * 0.4;
+    blips.push({ angle, r: rr * (0.3 + Math.random() * 0.65), rgb:[255,34,68], size:6+Math.random()*3 });
+  });
+  warnings.forEach((w, i) => {
+    const angle = (i / Math.max(warnings.length, 1)) * Math.PI * 2 * 0.7 + 1.2 + Math.random() * 0.5;
+    blips.push({ angle, r: rr * (0.25 + Math.random() * 0.5), rgb:[255,170,0], size:4+Math.random()*2 });
+  });
+  imports.forEach((imp, i) => {
+    const angle = (i / Math.max(imports.length, 1)) * Math.PI * 2 * 0.6 + 0.5;
+    const col = imp.type === 'stdlib' ? [0,255,136] : imp.type === 'third' ? [0,200,255] : [180,180,0];
+    blips.push({ angle, r: rr * (0.1 + Math.random() * 0.3), rgb:col, size:3 });
+  });
+}
+
+// ══════════════════════════════════════════
+//  CODE ANALYSIS
+// ══════════════════════════════════════════
+const STDLIB = new Set(['os','sys','json','time','datetime','math','random','struct','asyncio',
+  'threading','socket','re','pathlib','collections','dataclasses','typing','abc','functools',
+  'itertools','enum','io','copy','heapq','bisect','array','queue','subprocess','shutil',
+  'glob','tempfile','hashlib','hmac','uuid','base64','urllib','http','csv','xml','html',
+  'sqlite3','pickle','gzip','zipfile','struct','string','textwrap','traceback','warnings',
+  'logging','unittest','contextlib','weakref','gc','inspect','operator','decimal','fractions',
+  'statistics','cmath','numbers','pprint','reprlib','signal','mmap','ctypes']);
+const THIRD = new Set(['numpy','pandas','requests','flask','django','scipy','matplotlib',
+  'tensorflow','torch','sklearn','fastapi','aiohttp','sqlalchemy','pydantic','pytest','click',
+  'pillow','PIL','cv2','boto3','celery','redis','pymongo','psycopg2','httpx','trio','attrs']);
+
+async function analyzeCode() {
+  const code = editorEl.value;
+
+  let result;
+  try {
+    const res = await fetch(`${API_BASE}/api/analyze`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ code })
+    });
+    result = await res.json();
+  } catch {
+    // Backend unreachable — fall back to local analysis
+    result = analyzeCodeLocal(code);
+  }
+
+  const { errors = [], warnings = [], imports = [] } = result;
+  const lines = code.split('\n');
+  const errLines = new Set(errors.map(e => e.line));
+  const warnLines = new Set(warnings.map(w => w.line));
+
+  setBlips(errors, warnings, imports);
+  updateThreats(errors, warnings);
+  updateImports(imports);
+  updateInstruments(errors.length, warnings.length, lines.length, imports.length);
+  updateGutter(lines, errLines, warnLines);
+
+  const db = dbLoad();
+  const f = db.files.find(x => x.id === db.activeId);
+  if (f) { f.errors = errors.length; dbSave(db); renderTree(db); }
+
+  document.getElementById('sbStat').textContent = errors.length ? `${errors.length} ERR` : 'CLEAN';
+  document.getElementById('sbStat').className = 'sbv ' + (errors.length ? 'r' : 'g');
+
+  return { errors, warnings, imports };
+}
+
+// Local fallback (mirrors backend heuristics)
+function analyzeCodeLocal(code) {
+  const lines = code.split('\n');
+  const errors = [], warnings = [], imports = [];
+  const seen = new Set();
+
+  lines.forEach((raw, i) => {
+    const n = i + 1;
+    const s = raw.trim();
+    if (!s || s.startsWith('#')) return;
+
+    const im = s.match(/^import\s+([\w.]+)|^from\s+([\w.]+)\s+import/);
+    if (im) {
+      const mod = (im[1] || im[2]).split('.')[0];
+      const type = STDLIB.has(mod) ? 'stdlib' : THIRD.has(mod) ? 'third' : 'unknown';
+      if (!seen.has(mod)) { seen.add(mod); imports.push({ name: mod, line: n, type }); }
+    }
+
+    if (/^(def |class |if |elif |else\b|for |while |with |try\b|except\b|finally\b)/.test(s)) {
+      const hasColon = s.endsWith(':') || s.endsWith(':\\') || s.includes('#');
+      const isCont = s.endsWith('\\') || s.endsWith(',') || s.endsWith('(');
+      if (!hasColon && !isCont) errors.push({ line: n, msg: `Missing colon: '${s.slice(0, 55)}'` });
+    }
+    if (/\bmath\./.test(s) && !seen.has('math')) warnings.push({ line: n, msg: "'math' used but not imported" });
+    if (/^print\s+[^(=]/.test(s)) errors.push({ line: n, msg: 'Python 3: print() requires parentheses' });
+    if (/\b(TODO|FIXME|HACK|XXX)\b/.test(s)) warnings.push({ line: n, msg: s.slice(0, 55) });
+    if (raw.length > 100) warnings.push({ line: n, msg: `Line too long (${raw.length} chars)` });
+    if (/^except\s*:/.test(s)) warnings.push({ line: n, msg: "Bare 'except:'" });
+    if (/==\s*(None|True|False)/.test(s)) warnings.push({ line: n, msg: "Use 'is' instead of '=='" });
+  });
+  return { errors, warnings, imports };
+}
+
+function updateThreats(errors, warnings) {
+  const el = document.getElementById('threatList');
+  if (!errors.length && !warnings.length) {
+    el.innerHTML = '<div class="no-threats"><span class="nt-green">◉ ALL CLEAR</span>CLEAR WATERS</div>';
+    return;
+  }
+  el.innerHTML = [
+    ...errors.map(e =>
+      `<div class="threat-entry">
+        <div class="threat-hdr err-hdr">LINE ${e.line} • SYNTAX ERROR</div>
+        <div class="threat-msg">${e.msg}</div>
+      </div>`),
+    ...warnings.map(w =>
+      `<div class="threat-entry warn">
+        <div class="threat-hdr warn-hdr">LINE ${w.line} • WARNING</div>
+        <div class="threat-msg">${w.msg}</div>
+      </div>`)
+  ].join('');
+}
+
+function updateImports(imports) {
+  const el = document.getElementById('importsList');
+  if (!imports.length) {
+    el.innerHTML = '<div class="imp-row" style="color:#003344;font-size:10px">No imports detected</div>';
+    return;
+  }
+  el.innerHTML = imports.map(imp => {
+    const icons = { stdlib:'⬡', third:'⬢', unknown:'⬟' };
+    const badges = { stdlib:'badge-std', third:'badge-3p', unknown:'badge-unk' };
+    const labels = { stdlib:'STD', third:'3RD', unknown:'???' };
+    return `<div class="imp-row ${imp.type}">
+      <span class="imp-icon">${icons[imp.type]||'⬟'}</span>
+      <span class="imp-name">${imp.name}</span>
+      <span class="imp-line">L${imp.line}</span>
+      <span class="imp-badge ${badges[imp.type]||'badge-unk'}">${labels[imp.type]||'???'}</span>
+    </div>`;
+  }).join('');
+}
+
+function updateInstruments(errs, warns, lines, imps) {
+  document.getElementById('iErr').textContent     = errs;
+  document.getElementById('iWarn').textContent    = warns;
+  document.getElementById('iLines').textContent   = lines;
+  document.getElementById('iImports').textContent = imps;
+}
+
+function updateGutter(lines, errLines, warnLines) {
+  const el = document.getElementById('gutter');
+  el.innerHTML = lines.map((_, i) => {
+    const n = i + 1;
+    const cls = errLines.has(n) ? 'ln-err' : warnLines.has(n) ? 'ln-warn' : '';
+    return `<span class="ln ${cls}">${n}</span>`;
+  }).join('');
+}
+
+// ══════════════════════════════════════════
+//  EDITOR
+// ══════════════════════════════════════════
+let analysisTimer;
+const editorEl = document.getElementById('editor');
+
+editorEl.addEventListener('input', () => {
+  const db = dbLoad();
+  const f = db.files.find(x => x.id === db.activeId);
+  if (f) {
+    f.code = editorEl.value;
+    f.modified = true;
+    dbSave(db);
+  }
+  updateCursor();
+  updateCharCount();
+  const lines = editorEl.value.split('\n');
+  // Quick line num update
+  const el = document.getElementById('gutter');
+  el.innerHTML = lines.map((_, i) => `<span class="ln">${i+1}</span>`).join('');
+
+  clearTimeout(analysisTimer);
+  analysisTimer = setTimeout(analyzeCode, 700);
+});
+
+editorEl.addEventListener('keyup', updateCursor);
+editorEl.addEventListener('click', updateCursor);
+
+editorEl.addEventListener('keydown', e => {
+  if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') { e.preventDefault(); runCode(); }
+  if ((e.ctrlKey || e.metaKey) && e.key === 's') { e.preventDefault(); saveFile(); }
+  if (e.key === 'Tab') {
+    e.preventDefault();
+    const s = editorEl.selectionStart, end = editorEl.selectionEnd;
+    editorEl.value = editorEl.value.slice(0, s) + '    ' + editorEl.value.slice(end);
+    editorEl.selectionStart = editorEl.selectionEnd = s + 4;
+    editorEl.dispatchEvent(new Event('input'));
+  }
+});
+
+function updateCursor() {
+  const text = editorEl.value.substring(0, editorEl.selectionStart);
+  const lines = text.split('\n');
+  document.getElementById('sbCursor').textContent = `${lines.length}:${lines[lines.length-1].length+1}`;
+}
+function updateCharCount() {
+  document.getElementById('sbChars').textContent = editorEl.value.length.toLocaleString();
+}
+
+// ══════════════════════════════════════════
+//  RUN
+// ══════════════════════════════════════════
+function runCode() {
+  const ts = new Date().toLocaleTimeString();
+  const code = editorEl.value;
+  setMode('RUNNING', 'a');
+  log(`[${ts}] ▶  LAUNCH SEQUENCE INITIATED`, 'o-sys');
+
+  // Open WebSocket for streaming execution
+  let ws;
+  try {
+    ws = new WebSocket(`${API_WS}/ws/run`);
+  } catch (e) {
+    log(`[${ts}] ✗  Cannot connect to backend: ${e.message}`, 'o-err');
+    setMode('ERROR', 'r');
+    return;
+  }
+
+  ws.onopen = () => {
+    ws.send(JSON.stringify({ code, timeout: 15 }));
+    log(`[${ts}] ⟳  Transmitting to Python runtime...`, 'o-dim');
+  };
+
+  ws.onmessage = ({ data }) => {
+    let frame;
+    try { frame = JSON.parse(data); } catch { return; }
+    const { type, data: text } = frame;
+    if (type === 'stdout') {
+      String(text).split('\n').forEach(l => l && log('  › ' + l, 'o-ok'));
+    } else if (type === 'stderr') {
+      String(text).split('\n').forEach(l => l && log('  ✗ ' + l, 'o-err'));
+    } else if (type === 'done') {
+      const ok = frame.exit_code === 0;
+      log(`[${ts}] ${ok ? '✓  MISSION COMPLETE — exit 0' : '✗  MISSION FAILED — exit ' + frame.exit_code}`, ok ? 'o-ok' : 'o-err');
+      setMode(ok ? 'READY' : 'ERROR', ok ? 'g' : 'r');
+      ws.close();
+      // persist in local history
+      const db = dbLoad();
+      db.history.unshift({ file: db.files.find(x=>x.id===db.activeId)?.name, ts, status: ok ? 'ok' : 'error' });
+      if (db.history.length > 100) db.history.pop();
+      dbSave(db);
+    } else if (type === 'error') {
+      log(`  ✗ ${text}`, 'o-err');
+      setMode('ERROR', 'r');
+    }
+  };
+
+  ws.onerror = () => {
+    log(`[${ts}] ✗  WebSocket error — is backend running at ${API_BASE}?`, 'o-err');
+    setMode('ERROR', 'r');
+  };
+
+  ws.onclose = (ev) => {
+    if (ev.code !== 1000 && ev.code !== 1005) {
+      log(`[SYS] Connection closed unexpectedly (code ${ev.code})`, 'o-warn');
+    }
+  };
+}
+
+function log(text, cls='o-sys') {
+  const body = document.getElementById('outputBody');
+  const span = document.createElement('span');
+  span.className = `out-line ${cls}`;
+  span.textContent = text;
+  body.appendChild(span);
+  body.appendChild(document.createElement('br'));
+  body.scrollTop = body.scrollHeight;
+}
+
+function clearOutput() {
+  document.getElementById('outputBody').innerHTML = '';
+}
+
+function setMode(text, color) {
+  const el = document.getElementById('sbMode');
+  el.textContent = text;
+  el.className = 'sbv ' + color;
+}
+
+// ══════════════════════════════════════════
+//  FILE MANAGEMENT
+// ══════════════════════════════════════════
+let _uid = 100;
+
+function renderTree(db) {
+  const el = document.getElementById('fileTree');
+  el.innerHTML = db.files.map(f => {
+    const active = f.id === db.activeId ? 'active' : '';
+    const errCls = f.errors > 0 ? 'has-err' : '';
+    const badge  = f.errors > 0
+      ? `<span class="fi-err">${f.errors}✗</span>`
+      : `<span class="fi-ok">✓</span>`;
+    const mod = f.modified ? '<span class="fi-mod">●</span>' : '';
+    return `<div class="file-item ${active} ${errCls}" onclick="switchFile(${f.id})">
+      <span class="fi-icon">⬡</span>
+      <span class="fi-name" title="${f.name}">${f.name}</span>
+      ${mod}${badge}
+    </div>`;
+  }).join('');
+}
+
+function renderTabs(db) {
+  const el = document.getElementById('tabBar');
+  el.innerHTML = db.files.map(f => {
+    const active  = f.id === db.activeId ? 'active' : '';
+    const dirty   = f.modified ? 'tab-dirty' : '';
+    const errCls  = f.errors > 0 ? 'tab-err' : '';
+    return `<div class="tab ${active} ${dirty} ${errCls}" onclick="switchFile(${f.id})">
+      <span class="tab-dot"></span>${f.name}
+      <span class="tab-close" onclick="event.stopPropagation();closeFileId(${f.id})">✕</span>
+    </div>`;
+  }).join('');
+}
+
+function switchFile(id) {
+  const db = dbLoad();
+  db.activeId = id;
+  dbSave(db);
+  const f = db.files.find(x => x.id === id);
+  if (!f) return;
+  editorEl.value = f.code;
+  document.getElementById('sbFile').textContent = f.name;
+  renderTree(db);
+  renderTabs(db);
+  analyzeCode();
+  updateCharCount();
+  log(`[SYS] → ${f.name}`, 'o-sys');
+}
+
+async function newFile() {
+  const db = dbLoad();
+  const id = ++_uid;
+  const name = `module_${id.toString(36)}.py`;
+  const code = `# ${name}\n\n`;
+  db.files.push({ id, name, code, errors: 0, modified: false });
+  db.activeId = id;
+  dbSave(db);
+  editorEl.value = code;
+  document.getElementById('sbFile').textContent = name;
+  renderTree(db);
+  renderTabs(db);
+  analyzeCode();
+  log(`[SYS] Created ${name}`, 'o-info');
+  // Sync to backend
+  try {
+    await fetch(`${API_BASE}/api/files`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name, code })
+    });
+  } catch {}
+}
+
+async function saveFile() {
+  const db = dbLoad();
+  const f = db.files.find(x => x.id === db.activeId);
+  if (f) {
+    f.code = editorEl.value;
+    f.modified = false;
+    dbSave(db);
+    renderTree(db);
+    renderTabs(db);
+    // Persist to backend
+    try {
+      await fetch(`${API_BASE}/api/files/${f.id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ code: f.code, modified: false })
+      });
+      log('[SYS] File saved to backend ✓', 'o-ok');
+    } catch {
+      log('[SYS] File saved locally (backend offline)', 'o-warn');
+    }
+  }
+}
+
+function closeFile() {
+  const db = dbLoad();
+  closeFileId(db.activeId, db);
+}
+
+function closeFileId(id, db) {
+  if (!db) db = dbLoad();
+  if (db.files.length <= 1) { log('[SYS] Cannot close last file', 'o-warn'); return; }
+  db.files = db.files.filter(f => f.id !== id);
+  db.activeId = db.files[db.files.length - 1].id;
+  dbSave(db);
+  const f = db.files.find(x => x.id === db.activeId);
+  editorEl.value = f.code;
+  document.getElementById('sbFile').textContent = f.name;
+  renderTree(db);
+  renderTabs(db);
+  analyzeCode();
+}
+
+async function formatCode() {
+  const code = editorEl.value;
+  let formatted = code;
+  try {
+    const res = await fetch(`${API_BASE}/api/format`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ code })
+    });
+    const data = await res.json();
+    formatted = data.code;
+    log('[SYS] Formatted (PEP-8 via backend) ✓', 'o-ok');
+  } catch {
+    // fallback: local tab-expand + trim
+    formatted = code.replace(/\t/g, '    ')
+      .split('\n').map(l => l.trimEnd()).join('\n').replace(/\n{3,}/g, '\n\n');
+    log('[SYS] Formatted (local fallback) ✓', 'o-warn');
+  }
+  editorEl.value = formatted;
+  editorEl.dispatchEvent(new Event('input'));
+}
+
+// ══════════════════════════════════════════
+//  SNIPPETS
+// ══════════════════════════════════════════
+const SNIPPETS = {
+nav: CODE.nav,
+sonar: CODE.sonar,
+torpedo: CODE.torp,
+comms:`# Submarine Communications System
+import json
+import time
+import struct
+
+VLF_HEADER = b'\\x02\\x47\\x4E'  # GENA header
+
+def encode_vlf(message: str) -> bytes:
+    """Encode message for VLF (Very Low Frequency) transmission"""
+    payload = message.encode('ascii')
+    checksum = sum(payload) % 256
+    return VLF_HEADER + struct.pack('H', len(payload)) + payload + bytes([checksum])
+
+def decode_vlf(data: bytes) -> str:
+    if data[:3] != VLF_HEADER:
+        raise ValueError("Invalid VLF header")
+    length = struct.unpack('H', data[3:5])[0]
+    payload = data[5:5+length]
+    checksum = sum(payload) % 256
+    if checksum != data[5+length]:
+        raise ValueError("Checksum mismatch")
+    return payload.decode('ascii')
+
+def broadcast(message: str, priority: str = 'ROUTINE') -> dict:
+    LEVELS = {'FLASH':1, 'IMMEDIATE':2, 'PRIORITY':3, 'ROUTINE':4}
+    encoded = encode_vlf(message)
+    packet = {
+        'priority': priority,
+        'level': LEVELS.get(priority, 4),
+        'timestamp': time.time(),
+        'message': message,
+        'bytes': len(encoded),
+        'hex': encoded.hex()
+    }
+    print(json.dumps(packet, indent=2))
+    return packet
+
+broadcast("DIVE TO 300M, HEADING 045, SILENT RUNNING", "IMMEDIATE")
+broadcast("SONAR CONTACT BEARING 270, RANGE 5000M", "PRIORITY")
+`,
+reactor:`# Nuclear Reactor Management System
+from dataclasses import dataclass
+from typing import Optional
+import math
+import time
+
+@dataclass
+class ReactorCore:
+    power_level: float = 0.0     # 0-100%
+    temperature_c: float = 285.0  # Celsius
+    pressure_bar: float = 155.0   # Primary circuit
+    coolant_flow: float = 100.0   # % nominal
+    control_rods: float = 50.0    # % insertion (100=fully inserted=shutdown)
+
+    NOMINAL_TEMP = 310.0
+    NOMINAL_POWER = 100.0
+    SCRAM_TEMP = 350.0
+
+    def set_power(self, target_pct: float, ramp_rate: float = 5.0) -> None:
+        target_pct = max(0.0, min(100.0, target_pct))
+        print(f"Power ramp: {self.power_level:.1f}% → {target_pct:.1f}%")
+        self.power_level = target_pct
+        self.temperature_c = self.NOMINAL_TEMP * (0.9 + 0.1 * target_pct / 100)
+        self.control_rods = 100 - target_pct * 0.8
+
+    def scram(self) -> None:
+        """Emergency reactor shutdown"""
+        print("⚡ SCRAM INITIATED — Inserting all control rods")
+        self.control_rods = 100.0
+        self.power_level = 0.0
+        print("   Reactor subcritical — decay heat removal active")
+
+    def status(self) -> dict:
+        margin = self.SCRAM_TEMP - self.temperature_c
+        return {
+            'power_pct': round(self.power_level, 1),
+            'temp_c': round(self.temperature_c, 1),
+            'temp_margin_c': round(margin, 1),
+            'control_rods_pct': round(self.control_rods, 1),
+            'state': 'CRITICAL' if margin < 20 else 'NORMAL'
+        }
+
+core = ReactorCore()
+core.set_power(85.0)
+import json
+print(json.dumps(core.status(), indent=2))
+`,
+periscope:`# Periscope & Optical Sensor System
+import math
+import struct
+from dataclasses import dataclass
+from typing import Tuple, Optional
+
+@dataclass
+class PeriscopeSystem:
+    depth: float = 0.0          # Current sub depth (m)
+    bearing: float = 0.0        # Rotation angle (degrees)
+    elevation: float = 0.0      # Tilt angle (degrees)
+    zoom: float = 1.0           # Magnification (1x-10x)
+    mode: str = "OPTICAL"       # OPTICAL | THERMAL | RADAR
+
+    MAX_DEPTH = 18.0  # Max operating depth in meters
+
+    def extend(self, sub_depth: float) -> bool:
+        """Raise periscope — only valid at periscope depth"""
+        if sub_depth > self.MAX_DEPTH:
+            print(f"⚠  Too deep for periscope: {sub_depth}m (max {self.MAX_DEPTH}m)")
+            return False
+        self.depth = sub_depth
+        print(f"Periscope extended at {sub_depth}m depth")
+        return True
+
+    def rotate(self, bearing: float) -> None:
+        self.bearing = bearing % 360
+
+    def estimate_range(self, target_height_m: float, pixel_height: float,
+                       image_height_px: float = 1080, fov_deg: float = 30.0) -> float:
+        """Estimate range using angular size method"""
+        fov_rad = math.radians(fov_deg / self.zoom)
+        angular_size_rad = fov_rad * (pixel_height / image_height_px)
+        if angular_size_rad < 1e-9:
+            return float('inf')
+        return target_height_m / math.tan(angular_size_rad)
+
+scope = PeriscopeSystem()
+if scope.extend(12.0):
+    scope.rotate(045)
+    scope.zoom = 4.0
+    rng = scope.estimate_range(target_height_m=30, pixel_height=45)
+    print(f"Bearing: {scope.bearing:06.2f}°")
+    print(f"Estimated range: {rng:.0f}m ({rng/1000:.2f}km)")
+`
+};
+
+function loadSnippet(type) {
+  const code = SNIPPETS[type];
+  if (!code) { log(`[SYS] Unknown snippet: ${type}`, 'o-warn'); return; }
+  const db = dbLoad();
+  const fname = `${type}_module.py`;
+  const existing = db.files.find(f => f.name === fname);
+  if (existing) { switchFile(existing.id); return; }
+  const id = ++_uid;
+  db.files.push({ id, name: fname, code, errors:0, modified:false });
+  db.activeId = id;
+  dbSave(db);
+  editorEl.value = code;
+  document.getElementById('sbFile').textContent = fname;
+  renderTree(db);
+  renderTabs(db);
+  analyzeCode();
+  log(`[SYS] Loaded ${fname}`, 'o-info');
+}
+
+// ══════════════════════════════════════════
+//  EMERGENCY
+// ══════════════════════════════════════════
+async function emergencySurface() {
+  log('[!!!] ═══ EMERGENCY SURFACE PROTOCOL ENGAGED ═══', 'o-err');
+  log('[!!!] Blowing all ballast tanks — max ascent rate', 'o-err');
+  log('[!!!] MAYDAY MAYDAY MAYDAY — USS NAUTILUS', 'o-err');
+  setMode('EMERGENCY', 'r');
+  document.getElementById('gDepth').textContent   = 'ASCENDING';
+  document.getElementById('gDepth').className     = 'gauge-val red';
+  document.getElementById('gStatus').textContent  = 'EMERGENCY';
+  document.getElementById('gStatus').className    = 'gauge-val red';
+
+  // Notify backend
+  try {
+    await fetch(`${API_BASE}/api/submarine/surface`, { method: 'POST' });
+  } catch {}
+
+  let d = 247;
+  const t = setInterval(() => {
+    d -= 18 + Math.random() * 8;
+    if (d <= 0) {
+      d = 0;
+      clearInterval(t);
+      log('[SYS] Surface achieved. Standing by.', 'o-ok');
+      setMode('READY', 'g');
+      document.getElementById('gDepth').textContent  = '0m';
+      document.getElementById('gDepth').className    = 'gauge-val';
+      document.getElementById('gStatus').textContent = 'ONLINE';
+      document.getElementById('gStatus').className   = 'gauge-val';
+      setTimeout(() => {
+        document.getElementById('gDepth').textContent = '247m';
+        document.getElementById('gDepth').className   = 'gauge-val';
+      }, 4000);
+    } else {
+      document.getElementById('gDepth').textContent = `${Math.round(d)}m`;
+    }
+  }, 200);
+}
+
+// ══════════════════════════════════════════
+//  LIVE TELEMETRY — WebSocket feed from backend
+// ══════════════════════════════════════════
+(function startTelemetry() {
+  let ws, retryMs = 3000;
+
+  function connect() {
+    try { ws = new WebSocket(`${API_WS}/ws/telemetry`); } catch { return; }
+
+    ws.onmessage = ({ data }) => {
+      let t;
+      try { t = JSON.parse(data); } catch { return; }
+      const depthEl = document.getElementById('gDepth');
+      const presEl  = document.getElementById('gPres');
+      const hullEl  = document.getElementById('gHull');
+      if (depthEl && depthEl.textContent !== 'ASCENDING') {
+        depthEl.textContent = t.depth_m + 'm';
+        presEl.textContent  = t.pressure_atm + 'ATM';
+        hullEl.textContent  = t.hull_pct + '%';
+      }
+      retryMs = 3000;
+    };
+
+    ws.onclose = () => { setTimeout(connect, retryMs); retryMs = Math.min(retryMs * 2, 30000); };
+    ws.onerror = () => ws.close();
+  }
+  connect();
+})();
+
+// ══════════════════════════════════════════
+//  BACKEND CONFIG
+// ══════════════════════════════════════════
+const API_BASE = 'http://localhost:8000';
+const API_WS   = 'ws://localhost:8000';
+
+async function checkBackend() {
+  try {
+    const res = await fetch(`${API_BASE}/health`, { signal: AbortSignal.timeout(2000) });
+    if (res.ok) {
+      log('[NET] Backend connection established ✓', 'o-ok');
+      document.getElementById('gStatus').textContent = 'ONLINE';
+      document.getElementById('gStatus').className   = 'gauge-val g';
+      // Load backend file list on boot
+      const fr = await fetch(`${API_BASE}/api/files`);
+      if (fr.ok) {
+        const { files } = await fr.json();
+        const db = dbLoad();
+        // Merge backend files that aren't already local
+        files.forEach(bf => {
+          if (!db.files.find(lf => lf.name === bf.name)) db.files.push(bf);
+        });
+        dbSave(db);
+        renderTree(db);
+        renderTabs(db);
+      }
+    }
+  } catch {
+    log('[NET] Backend offline — running in local mode', 'o-warn');
+    log('[NET] Start backend: uvicorn main:app --reload', 'o-dim');
+  }
+}
+
+// ══════════════════════════════════════════
+//  BOOT
+// ══════════════════════════════════════════
+(function boot() {
+  const db = dbLoad();
+  const active = db.files.find(x => x.id === db.activeId) || db.files[0];
+  db.activeId = active.id;
+  dbSave(db);
+  editorEl.value = active.code;
+  document.getElementById('sbFile').textContent = active.name;
+  renderTree(db);
+  renderTabs(db);
+  log('[SYS] NAUTILUS-IDE v3.1 initialized', 'o-sys');
+  log('[SYS] Deep water edition — all systems nominal', 'o-sys');
+  log('[SYS] Ctrl+Enter to launch | Ctrl+S to save', 'o-dim');
+  setTimeout(analyzeCode, 400);
+  updateCharCount();
+  checkBackend();
+})();
+</script>
+</body>
+</html>
